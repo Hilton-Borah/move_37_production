@@ -209,12 +209,60 @@ const editorSlice = createSlice({
         clip.endTime = action.payload.newStartTime + duration;
       }
     },
-    // addToVideoLibrary: (state, action: PayloadAction<VideoClip>) => {
-    //   state.videoLibrary.push(action.payload);
-    // },
-    // removeFromVideoLibrary: (state, action: PayloadAction<string>) => {
-    //   state.videoLibrary = state.videoLibrary.filter(video => video.id !== action.payload);
-    // },
+    splitClip: (state, action: PayloadAction<{id: string; splitTime: number}>) => {
+      const clipIndex = state.timelineClips.findIndex(c => c.id === action.payload.id);
+      if (clipIndex >= 0) {
+        const clip = state.timelineClips[clipIndex];
+        const splitPosition = Math.max(
+          clip.startTime + 0.1,
+          Math.min(action.payload.splitTime, clip.endTime - 0.1)
+        );
+        
+        const newClip = {
+          ...clip,
+          id: `${clip.id}-split-${Date.now()}`,
+          startTime: splitPosition,
+          endTime: clip.endTime,
+          duration: clip.endTime - splitPosition
+        };
+        
+        state.timelineClips[clipIndex] = {
+          ...clip,
+          endTime: splitPosition,
+          duration: splitPosition - clip.startTime
+        };
+        
+        state.timelineClips.splice(clipIndex + 1, 0, newClip);
+      }
+    },
+    
+    trimClip: (state, action: PayloadAction<{id: string; startTime?: number; endTime?: number}>) => {
+      const clip = state.timelineClips.find(c => c.id === action.payload.id);
+      if (clip) {
+        if (action.payload.startTime !== undefined) {
+          const newDuration = clip.endTime - action.payload.startTime;
+          clip.startTime = action.payload.startTime;
+          clip.duration = newDuration;
+        }
+        if (action.payload.endTime !== undefined) {
+          clip.duration = action.payload.endTime - clip.startTime;
+          clip.endTime = action.payload.endTime;
+        }
+      }
+    },
+    
+    // Update duration calculation when clips change
+    recalculateDuration: (state) => {
+      if (state.timelineClips.length === 0) {
+        state.duration = 0;
+      } else {
+        state.duration = Math.max(...state.timelineClips.map(clip => clip.endTime));
+      }
+    },
+    updateTimelineClips: (state, action: PayloadAction<VideoClip[]>) => {
+      state.timelineClips = action.payload;
+    },
+    
   },
 });
 
@@ -222,8 +270,10 @@ export const {
   // Video Library
   addToVideoLibrary,
   removeFromVideoLibrary,
-  
-  // Timeline Clips
+  splitClip,
+trimClip,
+recalculateDuration,
+updateTimelineClips,
   addClipToTimeline,
   removeClipFromTimeline,
   moveClipInTimeline,

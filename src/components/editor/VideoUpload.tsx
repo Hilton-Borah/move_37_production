@@ -45,44 +45,53 @@ export default function VideoUpload() {
     };
   }, [uploadProgress]);
 
-  const onDrop = useCallback((acceptedFiles: File[]) => {
+  const onDrop = useCallback(async (acceptedFiles: File[]) => {
     setIsUploading(true);
     const newProgress: Record<string, number> = {};
     
-    acceptedFiles.forEach((file) => {
+    for (const file of acceptedFiles) {
       const fileId = `clip-${Date.now()}-${file.name}`;
       newProgress[fileId] = 0;
-      
-      // Create preview URL
       const previewUrl = URL.createObjectURL(file);
       
-      // Set initial progress
       setUploadProgress(prev => ({ ...prev, [fileId]: 0 }));
-
-      // Simulate upload completion
-      setTimeout(() => {
-        dispatch(addToVideoLibrary({
-          id: fileId,
-          name: clipName || file.name.replace(/\.[^/.]+$/, ''),
-          previewUrl,
-          startTime: 0,
-          endTime: 30,
-          duration: 30,
-          file,
-        }));
-        setUploadProgress(prev => {
-          const updated = { ...prev };
-          delete updated[fileId];
-          if (Object.keys(updated).length === 0) {
-            setIsUploading(false);
-          }
-          return updated;
-        });
-      }, 3000);
-    });
-
+  
+      // Get actual video duration
+      const duration = await getVideoDuration(file);
+      
+      dispatch(addToVideoLibrary({
+        id: fileId,
+        name: clipName || file.name.replace(/\.[^/.]+$/, ''),
+        previewUrl,
+        startTime: 0,
+        endTime: duration,
+        duration,
+        file,
+      }));
+      
+      setUploadProgress(prev => {
+        const updated = { ...prev };
+        delete updated[fileId];
+        if (Object.keys(updated).length === 0) {
+          setIsUploading(false);
+        }
+        return updated;
+      });
+    }
+  
     setUploadProgress(newProgress);
   }, [dispatch, clipName]);
+
+  async function getVideoDuration(file: File): Promise<number> {
+    return new Promise((resolve) => {
+      const video = document.createElement('video');
+      video.src = URL.createObjectURL(file);
+      video.onloadedmetadata = () => {
+        resolve(video.duration);
+        URL.revokeObjectURL(video.src);
+      };
+    });
+  }
 
   const handleDeleteVideo = (id: string) => {
     dispatch(removeFromVideoLibrary(id));
@@ -109,7 +118,7 @@ export default function VideoUpload() {
   });
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0"> {/* Added min-h-0 */}
       <div className="mb-4">
         <h2 className="text-lg font-semibold mb-2">Video Upload</h2>
         <div
@@ -129,7 +138,7 @@ export default function VideoUpload() {
         </div>
       </div>
 
-      {/* Upload Progress */}
+      <div className="min-h-0">
       {isUploading && (
         <div className="mb-4 space-y-2">
           <Input
@@ -151,9 +160,10 @@ export default function VideoUpload() {
           ))}
         </div>
       )}
+        </div>
 
       {/* Video Library */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto">
         <h3 className="text-md font-medium mb-2">Video Library</h3>
         {videoLibrary.length === 0 ? (
           <p className="text-sm text-gray-500 text-center py-4">No videos uploaded yet</p>
@@ -175,7 +185,7 @@ export default function VideoUpload() {
 
       <Button
         variant="outline"
-        className="mt-4"
+        className="mt-4 flex-shrink-0" 
         onClick={handleAddSample}
       >
         <PlusCircle className="h-4 w-4 mr-2" />
