@@ -18,7 +18,7 @@ import {
   updateTimelineClips
 } from '@/lib/store/editorSlice';
 import { cn } from '@/lib/utils';
-import { debounce } from 'lodash';
+import { debounce } from 'lodash'; 
 
 interface ClipItemProps {
   id: string;
