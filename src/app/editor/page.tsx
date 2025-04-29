@@ -5,7 +5,6 @@ import { RootState, AppDispatch } from '@/lib/store/store';
 import { useEffect, useRef, useState } from 'react';
 import VideoUpload from '@/components/editor/VideoUpload';
 import Timeline from '@/components/editor/Timeline';
-import AudioControls from '@/components/editor/AudioControls';
 import SubtitleEditor from '@/components/editor/SubtitleEditor';
 import ImageOverlay from '@/components/editor/ImageOverlay';
 import PreviewControls from '@/components/editor/PreviewControls';
@@ -13,6 +12,7 @@ import VideoPlayer from '@/components/editor/VideoPlayer';
 import { setDuration, setCurrentTime, togglePlay, setZoomLevel } from '@/lib/store/editorSlice';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
+import AudioEditor from '@/components/editor/AudioEditor';
 
 export default function EditorPage() {
   const dispatch = useDispatch<AppDispatch>();
@@ -123,7 +123,7 @@ export default function EditorPage() {
                 <ImageOverlay />
               </>
             )}
-            {activeTab === 'audio' && <AudioControls />}
+            {activeTab === 'audio' && <AudioEditor />}
             {activeTab === 'text' && <SubtitleEditor />}
           </div>
         )}

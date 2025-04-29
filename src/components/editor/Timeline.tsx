@@ -19,6 +19,7 @@ import {
 } from '@/lib/store/editorSlice';
 import { cn } from '@/lib/utils';
 import { debounce } from 'lodash'; 
+import { ImageIcon } from 'lucide-react';
 
 interface ClipItemProps {
   id: string;
@@ -30,10 +31,18 @@ interface ClipItemProps {
   isPlaying: boolean;
   isSelected: boolean;
   onMove: (id: string, newStartTime: number) => void;
+  type: 'video' | 'image';
+  overlayData?: {
+    position: { x: number; y: number };
+    size: { width: number; height: number };
+    opacity: number;
+    rotation: number;
+  };
+  duration: number;
 }
 
 const ClipItem: React.FC<ClipItemProps> = ({ 
-  id, startTime, endTime, name, previewUrl, zoomLevel, isPlaying, isSelected, onMove 
+  id, startTime, endTime, name, previewUrl, type, zoomLevel, isPlaying, isSelected, onMove 
 }) => {
   const dispatch = useDispatch<AppDispatch>();
   const timelineClips = useSelector((state: RootState) => state.editor.timelineClips);
@@ -53,7 +62,7 @@ const ClipItem: React.FC<ClipItemProps> = ({
   }));
 
 const [, drop] = useDrop(() => ({
-    accept: ['TIMELINE_CLIP', 'LIBRARY_VIDEO'],
+    accept: ['TIMELINE_CLIP', 'LIBRARY_VIDEO','IMAGE_OVERLAY'],
     hover: (item: any, monitor) => {
       if (item.type !== 'TIMELINE_CLIP') return;
       
@@ -85,12 +94,28 @@ const [, drop] = useDrop(() => ({
       onMove(item.id, startTime);
     },
     drop: (item: any) => {
-      if (item.id !== id) {
-        if (item.type === 'LIBRARY_VIDEO') {
-          // ... existing library drop logic ...
-        }
+      if (item.type === 'LIBRARY_VIDEO') {
+        // Existing video handling
+      } else if (item.type === 'IMAGE_OVERLAY') {
+        const newStartTime = timelineClips.length > 0 
+          ? timelineClips[timelineClips.length - 1].endTime
+          : 0;
+        
+        dispatch(addClipToTimeline({
+          id: `img-${Date.now()}`,
+          name: item.name,
+          previewUrl: item.previewUrl,
+          type: 'image',
+          startTime: newStartTime,
+          endTime: newStartTime + item.duration,
+          duration: item.duration,
+          position: item.position,
+          size: item.size,
+          opacity: item.opacity,
+          rotation: item.rotation
+        }));
       }
-    }
+    },
   }));
 
   const width = (endTime - startTime) * 100 * zoomLevel;
@@ -102,23 +127,36 @@ const [, drop] = useDrop(() => ({
         "h-16 rounded flex items-center justify-between px-2 relative overflow-hidden",
         isPlaying ? "ring-2 ring-blue-500 bg-blue-100" : "bg-blue-500 text-white",
         isSelected ? "ring-2 ring-yellow-500" : "",
-        isDragging ? "opacity-50" : "opacity-100",
-        isOver ? "bg-blue-600" : ""
+        // isDragging ? "opacity-50" : "opacity-100",
+        // isOver ? "bg-blue-600" : ""
       )}
       style={{ width: `${width}px`, minWidth: `${width}px` }}
     >
-      {isPlaying && (
-        <video
-          src={previewUrl}
-          className="absolute inset-0 object-cover w-full h-full opacity-20"
-          autoPlay
-          muted
+       {type === 'image' ? (
+        <img 
+          src={previewUrl} 
+          alt="Image overlay" 
+          className="absolute inset-0 object-cover w-full h-full opacity-70"
         />
+      ) : (
+        isPlaying && (
+          <video
+            src={previewUrl}
+            className="absolute inset-0 object-cover w-full h-full opacity-20"
+            autoPlay
+            muted
+          />
+        )
       )}
       <span className="truncate text-sm z-10">{name}</span>
       <span className="text-xs z-10">
         {formatTime(startTime)}-{formatTime(endTime)}
       </span>
+      {type === 'image' && (
+        <div className="absolute bottom-1 right-1 bg-black bg-opacity-50 rounded-full p-1">
+          <ImageIcon className="w-3 h-3 text-white" />
+        </div>
+      )}
     </div>
   );
 };
@@ -181,7 +219,7 @@ export default function Timeline() {
         return;
       }
       
-      // updateCurrentTime(newTime);
+      dispatch(setCurrentTime(newTime));
       animationFrameId = requestAnimationFrame(frame);
     };
     
@@ -197,19 +235,30 @@ export default function Timeline() {
   const handleSplitClip = () => {
     if (!selectedClipId || splitPosition === null) return;
     
-    const clip = timelineClips.find(c => c.id === selectedClipId);
-    if (!clip) return;
+    const clipIndex = timelineClips.findIndex(c => c.id === selectedClipId);
+    if (clipIndex === -1) return;
     
-    // Ensure split happens within clip bounds
+    const clip = timelineClips[clipIndex];
     const safeSplitTime = Math.max(
-      clip.startTime + 0.1, // Minimum 0.1s from start
-      Math.min(splitPosition, clip.endTime - 0.1) // Minimum 0.1s from end
+      clip.startTime + 0.1,
+      Math.min(splitPosition, clip.endTime - 0.1)
     );
     
+    // Pause playback during split
+    if (isPlaying) dispatch(togglePlay());
+    
     dispatch(splitClip({ 
-      id: selectedClipId, 
-      splitTime: safeSplitTime 
+      id: selectedClipId,
+      splitTime: safeSplitTime,
+      // Generate new ID for the second part
+      newClipId: `${selectedClipId}-split-${Date.now()}`
     }));
+    
+    // Adjust current time if we split the currently playing clip
+    if (currentTime >= safeSplitTime) {
+      dispatch(setCurrentTime(safeSplitTime));
+    }
+    
     setSelectedClipId(null);
     setSplitPosition(null);
   };
@@ -221,60 +270,84 @@ export default function Timeline() {
     if (clipIndex === -1) return;
     
     const clip = timelineClips[clipIndex];
+    let newTime = currentTime;
     
     if (type === 'start') {
-      // Don't allow trimming past other clips
       const minStart = clipIndex > 0 ? 
         timelineClips[clipIndex - 1].endTime : 0;
-      const newStart = Math.max(minStart, currentTime);
+      newTime = Math.max(minStart, currentTime);
       
-      dispatch(trimClip({ 
-        id: selectedClipId, 
-        startTime: newStart 
+      // If trimming the currently playing clip, adjust playback
+      if (isPlaying && currentTime < newTime) {
+        dispatch(setCurrentTime(newTime));
+      }
+      
+      dispatch(trimClip({
+        id: selectedClipId,
+        startTime: newTime,
+        duration: clip.endTime - newTime
       }));
     } else {
-      // Don't allow trimming before other clips
       const maxEnd = clipIndex < timelineClips.length - 1 ? 
         timelineClips[clipIndex + 1].startTime : duration;
-      const newEnd = Math.min(maxEnd, currentTime);
+      newTime = Math.min(maxEnd, currentTime);
       
-      dispatch(trimClip({ 
-        id: selectedClipId, 
-        endTime: newEnd 
+      // If trimming the currently playing clip, adjust playback
+      if (isPlaying && currentTime > newTime) {
+        dispatch(setCurrentTime(newTime));
+        dispatch(togglePlay()); // Pause if we trimmed past current time
+      }
+      
+      dispatch(trimClip({
+        id: selectedClipId,
+        endTime: newTime,
+        duration: newTime - clip.startTime
       }));
     }
     
     dispatch(recalculateDuration());
   };
 
+
   const handleDeleteClip = (id: string) => {
     const clipIndex = timelineClips.findIndex(c => c.id === id);
     if (clipIndex === -1) return;
     
     const clip = timelineClips[clipIndex];
-    const clipDuration = clip.endTime - clip.startTime;
+    const isPlayingDeletedClip = isPlaying && 
+      currentTime >= clip.startTime && 
+      currentTime <= clip.endTime;
+    
+    // Pause playback if deleting the currently playing clip
+    if (isPlayingDeletedClip) {
+      dispatch(togglePlay());
+    }
     
     dispatch(removeClipFromTimeline(id));
     
     // Shift subsequent clips to fill the gap
-    if (clipIndex < timelineClips.length - 1) {
-      const updatedClips = [...timelineClips];
-      updatedClips.splice(clipIndex, 1);
-      
-      for (let i = clipIndex; i < updatedClips.length; i++) {
-        updatedClips[i] = {
-          ...updatedClips[i],
-          startTime: updatedClips[i].startTime - clipDuration,
-          endTime: updatedClips[i].endTime - clipDuration
-        };
-      }
-      
-      // You'll need to implement a bulk update action in your slice
-      dispatch(updateTimelineClips(updatedClips));
+    const updatedClips = timelineClips.filter(c => c.id !== id);
+    const durationRemoved = clip.endTime - clip.startTime;
+    
+    for (let i = clipIndex; i < updatedClips.length; i++) {
+      updatedClips[i] = {
+        ...updatedClips[i],
+        startTime: updatedClips[i].startTime - durationRemoved,
+        endTime: updatedClips[i].endTime - durationRemoved
+      };
     }
     
+    dispatch(updateTimelineClips(updatedClips));
     dispatch(recalculateDuration());
+    
+    // Adjust current time if it was within the deleted clip
+    if (isPlayingDeletedClip) {
+      const newTime = clipIndex > 0 ? 
+        updatedClips[clipIndex - 1].endTime : 0;
+      dispatch(setCurrentTime(newTime));
+    }
   };
+
   const handleTimelineClick = (e: React.MouseEvent) => {
     if (!timelineRef.current) return;
     

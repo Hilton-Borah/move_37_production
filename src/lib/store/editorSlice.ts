@@ -1,27 +1,21 @@
-import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import { createSlice, PayloadAction } from "@reduxjs/toolkit";
+import { v4 as uuidv4 } from "uuid";
 
-export type Position = 'top' | 'middle' | 'bottom';
-export type FontFamily = 'sans' | 'serif' | 'mono';
-
-interface VideoClip {
-  id: string;
-  startTime: number;
-  endTime: number;
-  previewUrl: string;
-  name: string;
-  file?: File;
-  duration: number;
-  isActive?: boolean;
+interface Position {
+  x: number;
+  y: number;
 }
 
-interface AudioTrack {
-  id: string;
-  startTime: number;
-  endTime: number;
-  muted: boolean;
-  volume: number;
-  name: string;
-  url: string;
+interface Size {
+  width: number;
+  height: number;
+}
+
+interface SubtitleStyle {
+  fontFamily: string;
+  fontSize: number;
+  color: string;
+  backgroundColor: string;
 }
 
 interface Subtitle {
@@ -29,13 +23,8 @@ interface Subtitle {
   text: string;
   startTime: number;
   endTime: number;
-  position: Position;
-  style: {
-    fontFamily: FontFamily;
-    fontSize: number;
-    color: string;
-    backgroundColor: string;
-  };
+  position: "top" | "middle" | "bottom";
+  style: SubtitleStyle;
 }
 
 interface ImageOverlay {
@@ -43,269 +32,400 @@ interface ImageOverlay {
   url: string;
   startTime: number;
   endTime: number;
-  position: { x: number; y: number };
-  size: { width: number; height: number };
+  position: Position;
+  size: Size;
   opacity: number;
   rotation: number;
 }
 
+interface TimelineClip {
+  id: string;
+  name: string;
+  previewUrl: string;
+  type: "video" | "image" | "audio";
+  startTime: number;
+  endTime: number;
+  duration: number;
+  position?: Position;
+  size?: Size;
+  opacity?: number;
+  rotation?: number;
+  volume?: number;
+  muted?: boolean;
+  fadeIn?: number;
+  fadeOut?: number;
+}
+
+interface AudioTrack {
+  id: string;
+  name: string;
+  url: string;
+  startTime: number;
+  endTime: number;
+  volume: number;
+  muted: boolean;
+  fadeIn: number;
+  fadeOut: number;
+}
+
+interface VideoLibraryItem {
+  id: string;
+  name: string;
+  previewUrl: string;
+  duration: number;
+  filePath?: string; // Optional if you're storing file paths
+}
 interface EditorState {
-  videoLibrary: VideoClip[];      // All uploaded videos
-  timelineClips: VideoClip[];    // Videos currently in the timeline
+  timelineClips: TimelineClip[];
   audioTracks: AudioTrack[];
   subtitles: Subtitle[];
   imageOverlays: ImageOverlay[];
   currentTime: number;
-  isPlaying: boolean;
   duration: number;
-  selectedElement: string | null;
-  volume: number;
   zoomLevel: number;
-  activeVideoClipId: string | null;
+  isPlaying: boolean;
+  activeAudioTrackId: string | null;
+  videoLibrary: VideoLibraryItem[];
 }
 
 const initialState: EditorState = {
-  videoLibrary: [],
   timelineClips: [],
   audioTracks: [],
   subtitles: [],
   imageOverlays: [],
   currentTime: 0,
-  isPlaying: false,
   duration: 0,
-  selectedElement: null,
-  volume: 80,
   zoomLevel: 1,
-  activeVideoClipId: null,
+  isPlaying: false,
+  activeAudioTrackId: null,
+  videoLibrary: [],
 };
 
-const editorSlice = createSlice({
-  name: 'editor',
+export const editorSlice = createSlice({
+  name: "editor",
   initialState,
   reducers: {
-    // Video Library Actions
-    addToVideoLibrary: (state, action: PayloadAction<VideoClip>) => {
-      state.videoLibrary.push(action.payload);
-    },
-    removeFromVideoLibrary: (state, action: PayloadAction<string>) => {
-      state.videoLibrary = state.videoLibrary.filter(clip => clip.id !== action.payload);
-    },
-
-    // Timeline Clip Actions
-    addClipToTimeline: (state, action: PayloadAction<VideoClip>) => {
-      state.timelineClips.push(action.payload);
-      // Update total duration if this clip extends beyond current duration
-      const clipEndTime = action.payload.startTime + action.payload.duration;
-      if (clipEndTime > state.duration) {
-        state.duration = clipEndTime;
-      }
-    },
-    removeClipFromTimeline: (state, action: PayloadAction<string>) => {
-      state.timelineClips = state.timelineClips.filter(clip => clip.id !== action.payload);
-      // Recalculate duration
-      state.duration = state.timelineClips.reduce((max, clip) => 
-        Math.max(max, clip.startTime + clip.duration), 0);
-    },
-    moveClipInTimeline: (state, action: PayloadAction<{id: string; newStartTime: number}>) => {
-      const clip = state.timelineClips.find(c => c.id === action.payload.id);
-      if (clip) {
-        clip.startTime = action.payload.newStartTime;
-        clip.endTime = action.payload.newStartTime + clip.duration;
-      }
-    },
-    updateTimelineClip: (state, action: PayloadAction<{id: string; startTime?: number; endTime?: number}>) => {
-      const clip = state.timelineClips.find(c => c.id === action.payload.id);
-      if (clip) {
-        if (action.payload.startTime !== undefined) clip.startTime = action.payload.startTime;
-        if (action.payload.endTime !== undefined) clip.duration = action.payload.endTime - clip.startTime;
-      }
-    },
-
-    // Audio Track Actions
-    addAudioTrack: (state, action: PayloadAction<AudioTrack>) => {
-      state.audioTracks.push(action.payload);
-    },
-    updateAudioTrack: (state, action: PayloadAction<{id: string; volume?: number; muted?: boolean}>) => {
-      if (action.payload.id === 'all') {
-        state.audioTracks.forEach(track => {
-          if (action.payload.volume !== undefined) track.volume = action.payload.volume;
-          if (action.payload.muted !== undefined) track.muted = action.payload.muted;
-        });
-      } else {
-        const track = state.audioTracks.find(t => t.id === action.payload.id);
-        if (track) {
-          if (action.payload.volume !== undefined) track.volume = action.payload.volume;
-          if (action.payload.muted !== undefined) track.muted = action.payload.muted;
-        }
-      }
-    },
-
-    // Subtitle Actions
-    addSubtitle: (state, action: PayloadAction<Subtitle>) => {
-      state.subtitles.push(action.payload);
-    },
-    updateSubtitle: (state, action: PayloadAction<{id: string; text: string}>) => {
-      const subtitle = state.subtitles.find(s => s.id === action.payload.id);
-      if (subtitle) {
-        subtitle.text = action.payload.text;
-      }
-    },
-
-    // Image Overlay Actions
-    addImageOverlay: (state, action: PayloadAction<ImageOverlay>) => {
-      state.imageOverlays.push(action.payload);
-    },
-    updateImageOverlay: (state, action: PayloadAction<{id: string; position: {x: number; y: number}; size: {width: number; height: number}}>) => {
-      const overlay = state.imageOverlays.find(i => i.id === action.payload.id);
-      if (overlay) {
-        overlay.position = action.payload.position;
-        overlay.size = action.payload.size;
-      }
-    },
-
-    // Playback Controls
+    // Timeline and Video Controls
     setCurrentTime: (state, action: PayloadAction<number>) => {
       state.currentTime = action.payload;
     },
     togglePlay: (state) => {
       state.isPlaying = !state.isPlaying;
     },
-    setDuration: (state, action: PayloadAction<number>) => {
-      state.duration = action.payload;
-    },
-
-    // UI State
-    selectElement: (state, action: PayloadAction<string | null>) => {
-      state.selectedElement = action.payload;
-    },
-    setVolume: (state, action: PayloadAction<number>) => {
-      state.volume = action.payload;
-    },
     setZoomLevel: (state, action: PayloadAction<number>) => {
       state.zoomLevel = action.payload;
     },
-    setActiveVideoClip: (state, action: PayloadAction<string | null>) => {
-      state.activeVideoClipId = action.payload;
+    recalculateDuration: (state) => {
+      if (state.timelineClips.length === 0) {
+        state.duration = 0;
+        return;
+      }
+      state.duration = Math.max(
+        ...state.timelineClips.map((clip) => clip.endTime)
+      );
     },
 
-    // Deprecated (kept for backward compatibility)
-    addVideoClip: (state, action: PayloadAction<VideoClip>) => {
-      console.warn('addVideoClip is deprecated. Use addClipToTimeline instead.');
+    // Timeline Clip Actions
+    addClipToTimeline: (state, action: PayloadAction<TimelineClip>) => {
       state.timelineClips.push(action.payload);
-      if (state.duration < action.payload.endTime) {
-        state.duration = action.payload.endTime;
-      }
+      state.duration = Math.max(state.duration, action.payload.endTime);
     },
-    removeVideoClip: (state, action: PayloadAction<string>) => {
-      console.warn('removeVideoClip is deprecated. Use removeClipFromTimeline instead.');
-      state.timelineClips = state.timelineClips.filter(clip => clip.id !== action.payload);
+    removeClipFromTimeline: (state, action: PayloadAction<string>) => {
+      state.timelineClips = state.timelineClips.filter(
+        (clip) => clip.id !== action.payload
+      );
     },
-    moveClip: (state, action: PayloadAction<{id: string; newStartTime: number}>) => {
-      console.warn('moveClip is deprecated. Use moveClipInTimeline instead.');
-      const clip = state.timelineClips.find(c => c.id === action.payload.id);
+    moveClipInTimeline: (
+      state,
+      action: PayloadAction<{ id: string; newStartTime: number }>
+    ) => {
+      const clip = state.timelineClips.find((c) => c.id === action.payload.id);
       if (clip) {
         const duration = clip.endTime - clip.startTime;
         clip.startTime = action.payload.newStartTime;
         clip.endTime = action.payload.newStartTime + duration;
       }
     },
-    splitClip: (state, action: PayloadAction<{id: string; splitTime: number}>) => {
-      const clipIndex = state.timelineClips.findIndex(c => c.id === action.payload.id);
-      if (clipIndex >= 0) {
-        const clip = state.timelineClips[clipIndex];
-        const splitPosition = Math.max(
-          clip.startTime + 0.1,
-          Math.min(action.payload.splitTime, clip.endTime - 0.1)
-        );
-        
-        const newClip = {
-          ...clip,
-          id: `${clip.id}-split-${Date.now()}`,
-          startTime: splitPosition,
-          endTime: clip.endTime,
-          duration: clip.endTime - splitPosition
-        };
-        
-        state.timelineClips[clipIndex] = {
-          ...clip,
-          endTime: splitPosition,
-          duration: splitPosition - clip.startTime
-        };
-        
-        state.timelineClips.splice(clipIndex + 1, 0, newClip);
-      }
-    },
-    
-    trimClip: (state, action: PayloadAction<{id: string; startTime?: number; endTime?: number}>) => {
-      const clip = state.timelineClips.find(c => c.id === action.payload.id);
+    trimClip: (
+      state,
+      action: PayloadAction<{
+        id: string;
+        startTime?: number;
+        endTime?: number;
+        duration?: number;
+      }>
+    ) => {
+      const clip = state.timelineClips.find((c) => c.id === action.payload.id);
       if (clip) {
         if (action.payload.startTime !== undefined) {
-          const newDuration = clip.endTime - action.payload.startTime;
           clip.startTime = action.payload.startTime;
-          clip.duration = newDuration;
+          if (action.payload.duration !== undefined) {
+            clip.endTime = clip.startTime + action.payload.duration;
+          }
         }
         if (action.payload.endTime !== undefined) {
-          clip.duration = action.payload.endTime - clip.startTime;
           clip.endTime = action.payload.endTime;
+          if (action.payload.duration !== undefined) {
+            clip.startTime = clip.endTime - action.payload.duration;
+          }
         }
       }
     },
-    
-    // Update duration calculation when clips change
-    recalculateDuration: (state) => {
-      if (state.timelineClips.length === 0) {
-        state.duration = 0;
-      } else {
-        state.duration = Math.max(...state.timelineClips.map(clip => clip.endTime));
+    splitClip: (
+      state,
+      action: PayloadAction<{
+        id: string;
+        splitTime: number;
+        newClipId: string;
+      }>
+    ) => {
+      const clipIndex = state.timelineClips.findIndex(
+        (c) => c.id === action.payload.id
+      );
+      if (clipIndex >= 0) {
+        const clip = state.timelineClips[clipIndex];
+        if (
+          action.payload.splitTime > clip.startTime &&
+          action.payload.splitTime < clip.endTime
+        ) {
+          const newClip: TimelineClip = {
+            ...clip,
+            id: action.payload.newClipId,
+            startTime: action.payload.splitTime,
+            endTime: clip.endTime,
+            duration: clip.endTime - action.payload.splitTime,
+          };
+          state.timelineClips[clipIndex].endTime = action.payload.splitTime;
+          state.timelineClips[clipIndex].duration =
+            action.payload.splitTime - clip.startTime;
+          state.timelineClips.splice(clipIndex + 1, 0, newClip);
+        }
       }
     },
-    updateTimelineClips: (state, action: PayloadAction<VideoClip[]>) => {
+    updateTimelineClips: (state, action: PayloadAction<TimelineClip[]>) => {
       state.timelineClips = action.payload;
     },
-    
+
+    // Image Overlay Actions
+    addImageOverlay: (state, action: PayloadAction<ImageOverlay>) => {
+      state.imageOverlays.push(action.payload);
+    },
+    removeImageOverlay: (state, action: PayloadAction<string>) => {
+      state.imageOverlays = state.imageOverlays.filter(
+        (overlay) => overlay.id !== action.payload
+      );
+    },
+    updateImageOverlay: (
+      state,
+      action: PayloadAction<{
+        id: string;
+        position?: Position;
+        size?: Size;
+        opacity?: number;
+        rotation?: number;
+      }>
+    ) => {
+      const overlay = state.imageOverlays.find(
+        (o) => o.id === action.payload.id
+      );
+      if (overlay) {
+        if (action.payload.position) overlay.position = action.payload.position;
+        if (action.payload.size) overlay.size = action.payload.size;
+        if (action.payload.opacity) overlay.opacity = action.payload.opacity;
+        if (action.payload.rotation) overlay.rotation = action.payload.rotation;
+      }
+    },
+
+    // Audio Track Actions
+    addAudioTrack: (state, action: PayloadAction<AudioTrack>) => {
+      state.audioTracks.push(action.payload);
+      state.activeAudioTrackId = action.payload.id;
+    },
+    updateAudioTrack: (
+      state,
+      action: PayloadAction<{
+        id: string;
+        volume?: number;
+        muted?: boolean;
+        fadeIn?: number;
+        fadeOut?: number;
+      }>
+    ) => {
+      if (action.payload.id === "all") {
+        state.audioTracks.forEach((track) => {
+          if (action.payload.volume !== undefined)
+            track.volume = action.payload.volume;
+          if (action.payload.muted !== undefined)
+            track.muted = action.payload.muted;
+        });
+      } else {
+        const track = state.audioTracks.find((t) => t.id === action.payload.id);
+        if (track) {
+          if (action.payload.volume !== undefined)
+            track.volume = action.payload.volume;
+          if (action.payload.muted !== undefined)
+            track.muted = action.payload.muted;
+          if (action.payload.fadeIn !== undefined)
+            track.fadeIn = action.payload.fadeIn;
+          if (action.payload.fadeOut !== undefined)
+            track.fadeOut = action.payload.fadeOut;
+        }
+      }
+    },
+    removeAudioTrack: (state, action: PayloadAction<string>) => {
+      state.audioTracks = state.audioTracks.filter(
+        (t) => t.id !== action.payload
+      );
+      if (state.activeAudioTrackId === action.payload) {
+        state.activeAudioTrackId = null;
+      }
+    },
+    splitAudioTrack: (
+      state,
+      action: PayloadAction<{
+        trackId: string;
+        splitTime: number;
+        newTrackId: string;
+      }>
+    ) => {
+      const trackIndex = state.audioTracks.findIndex(
+        (t) => t.id === action.payload.trackId
+      );
+      if (trackIndex >= 0) {
+        const track = state.audioTracks[trackIndex];
+        if (
+          action.payload.splitTime > track.startTime &&
+          action.payload.splitTime < track.endTime
+        ) {
+          const newTrack: AudioTrack = {
+            ...track,
+            id: action.payload.newTrackId,
+            startTime: action.payload.splitTime,
+            endTime: track.endTime,
+          };
+          state.audioTracks[trackIndex].endTime = action.payload.splitTime;
+          state.audioTracks.splice(trackIndex + 1, 0, newTrack);
+        }
+      }
+    },
+    trimAudioTrack: (
+      state,
+      action: PayloadAction<{
+        trackId: string;
+        trimTime: number;
+        trimType: "start" | "end";
+      }>
+    ) => {
+      const track = state.audioTracks.find(
+        (t) => t.id === action.payload.trackId
+      );
+      if (track) {
+        if (action.payload.trimType === "start") {
+          track.startTime = Math.min(
+            action.payload.trimTime,
+            track.endTime - 0.1
+          );
+        } else {
+          track.endTime = Math.max(
+            action.payload.trimTime,
+            track.startTime + 0.1
+          );
+        }
+      }
+    },
+    setActiveAudioTrack: (state, action: PayloadAction<string | null>) => {
+      state.activeAudioTrackId = action.payload;
+    },
+
+    // Subtitle Actions
+    addSubtitle: (state, action: PayloadAction<Subtitle>) => {
+      state.subtitles.push(action.payload);
+    },
+    removeSubtitle: (state, action: PayloadAction<string>) => {
+      state.subtitles = state.subtitles.filter(
+        (sub) => sub.id !== action.payload
+      );
+    },
+    updateSubtitle: (
+      state,
+      action: PayloadAction<{
+        id: string;
+        text?: string;
+        startTime?: number;
+        endTime?: number;
+        position?: "top" | "middle" | "bottom";
+        style?: Partial<SubtitleStyle>;
+      }>
+    ) => {
+      const subtitle = state.subtitles.find((s) => s.id === action.payload.id);
+      if (subtitle) {
+        if (action.payload.text) subtitle.text = action.payload.text;
+        if (action.payload.startTime)
+          subtitle.startTime = action.payload.startTime;
+        if (action.payload.endTime) subtitle.endTime = action.payload.endTime;
+        if (action.payload.position)
+          subtitle.position = action.payload.position;
+        if (action.payload.style) {
+          subtitle.style = {
+            ...subtitle.style,
+            ...action.payload.style,
+          };
+        }
+      }
+    },
+    addToVideoLibrary: (state, action: PayloadAction<VideoLibraryItem>) => {
+      state.videoLibrary.push(action.payload);
+    },
+
+    removeFromVideoLibrary: (state, action: PayloadAction<string>) => {
+      state.videoLibrary = state.videoLibrary.filter(
+        (video) => video.id !== action.payload
+      );
+    },
+
+    updateVideoInLibrary: (
+      state,
+      action: PayloadAction<{
+        id: string;
+        name?: string;
+        previewUrl?: string;
+        duration?: number;
+      }>
+    ) => {
+      const video = state.videoLibrary.find((v) => v.id === action.payload.id);
+      if (video) {
+        if (action.payload.name) video.name = action.payload.name;
+        if (action.payload.previewUrl)
+          video.previewUrl = action.payload.previewUrl;
+        if (action.payload.duration) video.duration = action.payload.duration;
+      }
+    },
   },
 });
 
 export const {
-  // Video Library
-  addToVideoLibrary,
-  removeFromVideoLibrary,
-  splitClip,
-trimClip,
-recalculateDuration,
-updateTimelineClips,
+  setCurrentTime,
+  togglePlay,
+  setZoomLevel,
+  recalculateDuration,
   addClipToTimeline,
   removeClipFromTimeline,
   moveClipInTimeline,
-  updateTimelineClip,
-  
-  // Audio
+  trimClip,
+  splitClip,
+  updateTimelineClips,
+  addImageOverlay,
+  removeImageOverlay,
+  updateImageOverlay,
   addAudioTrack,
   updateAudioTrack,
-  
-  // Subtitles
+  removeAudioTrack,
+  splitAudioTrack,
+  trimAudioTrack,
+  setActiveAudioTrack,
   addSubtitle,
+  removeSubtitle,
   updateSubtitle,
-  
-  // Image Overlays
-  addImageOverlay,
-  updateImageOverlay,
-  
-  // Playback
-  setCurrentTime,
-  togglePlay,
-  setDuration,
-  
-  // UI State
-  selectElement,
-  setVolume,
-  setZoomLevel,
-  setActiveVideoClip,
-  
-  // Deprecated (but exported for backward compatibility)
-  addVideoClip,
-  removeVideoClip,
-  moveClip,
 } = editorSlice.actions;
 
 export default editorSlice.reducer;
