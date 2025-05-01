@@ -406,6 +406,8 @@ export const editorSlice = createSlice({
 export const {
   setCurrentTime,
   togglePlay,
+  addToVideoLibrary,
+  removeFromVideoLibrary,
   setZoomLevel,
   recalculateDuration,
   addClipToTimeline,

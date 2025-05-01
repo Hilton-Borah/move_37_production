@@ -9,7 +9,7 @@ import SubtitleEditor from '@/components/editor/SubtitleEditor';
 import ImageOverlay from '@/components/editor/ImageOverlay';
 import PreviewControls from '@/components/editor/PreviewControls';
 import VideoPlayer from '@/components/editor/VideoPlayer';
-import { setDuration, setCurrentTime, togglePlay, setZoomLevel } from '@/lib/store/editorSlice';
+import {setCurrentTime, togglePlay, setZoomLevel } from '@/lib/store/editorSlice';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import AudioEditor from '@/components/editor/AudioEditor';
@@ -30,7 +30,7 @@ export default function EditorPage() {
     };
 
     const handleLoadedMetadata = () => {
-      dispatch(setDuration(video.duration));
+      // dispatch(setDuration(video.duration));
     };
 
     video.addEventListener('timeupdate', handleTimeUpdate);
