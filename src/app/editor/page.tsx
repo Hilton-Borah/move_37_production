@@ -16,7 +16,7 @@ import AudioEditor from '@/components/editor/AudioEditor';
 
 export default function EditorPage() {
   const dispatch = useDispatch<AppDispatch>();
-  const { currentTime, isPlaying, duration, zoomLevel } = useSelector((state: RootState) => state.editor);
+  const {  isPlaying, zoomLevel } = useSelector((state: RootState) => state.editor);
   const [activeTab, setActiveTab] = useState('video');
   const [sidebarVisible, setSidebarVisible] = useState(true);
   const mainVideoRef = useRef<HTMLVideoElement>(null);
