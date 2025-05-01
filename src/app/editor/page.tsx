@@ -9,7 +9,7 @@ import SubtitleEditor from '@/components/editor/SubtitleEditor';
 import ImageOverlay from '@/components/editor/ImageOverlay';
 import PreviewControls from '@/components/editor/PreviewControls';
 import VideoPlayer from '@/components/editor/VideoPlayer';
-import {setCurrentTime, togglePlay, setZoomLevel } from '@/lib/store/editorSlice';
+import {setCurrentTime, setZoomLevel } from '@/lib/store/editorSlice';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import AudioEditor from '@/components/editor/AudioEditor';

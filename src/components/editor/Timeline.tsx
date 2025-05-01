@@ -18,7 +18,6 @@ import {
   updateTimelineClips
 } from '@/lib/store/editorSlice';
 import { cn } from '@/lib/utils';
-import { debounce } from 'lodash'; 
 import { ImageIcon } from 'lucide-react';
 
 interface ClipItemProps {
@@ -174,12 +173,7 @@ export default function Timeline() {
   const [splitPosition, setSplitPosition] = useState<number | null>(null);
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
 
-  
-  const updateCurrentTime = useRef(
-    debounce((time: number) => {
-      dispatch(setCurrentTime(time));
-    }, 50)
-  ).current;
+
   
   const [, drop] = useDrop(() => ({
     accept: 'LIBRARY_VIDEO',

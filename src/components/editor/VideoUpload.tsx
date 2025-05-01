@@ -8,7 +8,7 @@ import { addToVideoLibrary, removeFromVideoLibrary } from '@/lib/store/editorSli
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
-import { Video, Trash2, PlusCircle } from 'lucide-react';
+import { Video, PlusCircle } from 'lucide-react';
 import VideoLibraryItem from '../VideoLibraryItem';
 
 export default function VideoUpload() {

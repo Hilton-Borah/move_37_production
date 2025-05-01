@@ -1,10 +1,9 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
-import { Input } from '@/components/ui/input';
 import { 
   addAudioTrack, 
   updateAudioTrack,
@@ -17,7 +16,6 @@ import { useDropzone } from 'react-dropzone';
 import { useDrag, useDrop } from 'react-dnd';
 import { Volume2, VolumeX, Music, Scissors, Trash2, Move } from 'lucide-react';
 import { RootState } from '@/lib/store/store';
-import { formatTime } from '@/lib/utils/timeUtils';
 import WaveSurfer from 'wavesurfer.js';
 
 interface AudioTrack {
@@ -40,7 +38,6 @@ export default function AudioEditor() {
   
   const [masterVolume, setMasterVolume] = useState(80);
   const [isMasterMuted, setIsMasterMuted] = useState(false);
-  const [audioFiles, setAudioFiles] = useState<File[]>([]);
   const [waveforms, setWaveforms] = useState<{[key: string]: WaveSurfer | null}>({});
   const waveformRefs = useRef<{[key: string]: HTMLDivElement | null}>({});
   const containerRef = useRef<HTMLDivElement>(null);
